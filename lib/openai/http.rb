@@ -28,7 +28,9 @@ module OpenAI
     def multipart_post(path:, parameters: nil)
       parse_json(conn(multipart: true).post(uri(path: path)) do |req|
         req.headers = headers.merge({ "Content-Type" => "multipart/form-data" })
-        req.body = multipart_parameters(parameters)
+        body = build_request_body(parameters)
+        configure_stream_proc(req, parameters) if parameters[:stream]
+        req.body = multipart_parameters(body)
       end&.body)
     end
 
@@ -96,17 +98,28 @@ module OpenAI
     end
 
     def configure_json_post_request(req, parameters)
+      body = build_request_body(parameters)
+      configure_stream_proc(req, parameters) if parameters[:stream]
+      req.headers = headers
+      req.body = body.to_json
+    end
+
+    def build_request_body(parameters)
       req_parameters = parameters.dup
 
-      if parameters[:stream].respond_to?(:call)
-        req.options.on_data = Stream.new(user_proc: parameters[:stream]).to_proc
+      if req_parameters[:stream]
         req_parameters[:stream] = true # Necessary to tell OpenAI to stream.
-      elsif parameters[:stream]
+      end
+
+      req_parameters
+    end
+
+    def configure_stream_proc(req, parameters)
+      unless parameters[:stream].respond_to?(:call)
         raise ArgumentError, "The stream parameter must be a Proc or have a #call method"
       end
 
-      req.headers = headers
-      req.body = req_parameters.to_json
+      req.options.on_data = Stream.new(user_proc: parameters[:stream]).to_proc
     end
   end
 end

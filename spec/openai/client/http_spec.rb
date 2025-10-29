@@ -91,6 +91,42 @@ RSpec.describe OpenAI::HTTP do
       end
     end
 
+    describe ".multipart_post streaming" do
+      let(:parameters) do
+        {
+          image: File.join(RSPEC_ROOT, "fixtures/files", "image.png"),
+          prompt: "Stream test",
+          model: "gpt-image-1",
+          stream: stream
+        }
+      end
+
+      let(:response) do
+        OpenAI::Client.new.images.edit(parameters: parameters)
+      end
+
+      context "streaming" do
+        let(:chunks) { [] }
+        let(:stream) do
+          proc do |chunk, _event|
+            chunks << chunk
+          end
+        end
+
+        it "times out" do
+          expect { response }.to raise_error do |error|
+            expect(timeout_errors).to include(error.class)
+          end
+        end
+
+        it "doesn't change the parameters stream proc" do
+          expect { response }.to raise_error(Faraday::ConnectionFailed)
+
+          expect(parameters[:stream]).to eq(stream)
+        end
+      end
+    end
+
     describe ".delete" do
       let(:response) do
         OpenAI::Client.new.files.delete(id: "1a")
